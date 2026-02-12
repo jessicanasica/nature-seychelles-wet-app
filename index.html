@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Species - LEAP Wetland Monitoring</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+    .header { background: #52a676; color: white; padding: 20px; }
+    .header h1 { margin: 0; font-size: 1.5rem; }
+    .content { padding: 20px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 6px; color: #333; }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;
+    }
+    .form-group textarea { resize: vertical; min-height: 100px; }
+    .form-group .hint { font-size: 12px; color: #888; margin-top: 4px; }
+    .photos-section { background: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .photos-section h3 { margin: 0 0 10px 0; color: #52a676; }
+    .photo-row { margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+    .photo-row img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; }
+    .photo-row span { flex: 1; font-size: 13px; color: #555; word-break: break-all; }
+    .btn { display: inline-block; padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; text-decoration: none; color: white; }
+    .btn-primary { background: #52a676; }
+    .btn-primary:hover { background: #478f65; }
+    .btn-secondary { background: #6b7280; margin-left: 10px; }
+    .btn-secondary:hover { background: #4b5563; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .actions { margin-top: 20px; text-align: center; }
+    .info-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin-bottom: 20px; border-radius: 0 8px 8px 0; }
+    .loading { text-align: center; padding: 60px 20px; }
+    .loading .spinner { width: 40px; height: 40px; border: 4px solid #ddd; border-top-color: #52a676; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box { background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px; border-radius: 0 8px 8px 0; color: #991b1b; }
+    .success-box { background: #f0fdf4; border-left: 4px solid #52a676; padding: 15px; margin: 20px; border-radius: 0 8px 8px 0; color: #166534; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Edit Species Before Approval</h1>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading species data...</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="error" style="display:none;">
+      <div class="error-box">
+        <strong>Error:</strong> <span id="error-message"></span>
+      </div>
+    </div>
+
+    <!-- Success state -->
+    <div id="success" style="display:none;">
+      <div class="success-box">
+        <strong id="success-message"></strong>
+      </div>
+    </div>
+
+    <!-- Edit form -->
+    <div id="edit-form" class="content" style="display:none;">
+      <div class="info-box">
+        <strong>Submitted by:</strong> <span id="submitted-by"></span><br>
+        <strong>Request ID:</strong> <span id="request-id"></span>
+      </div>
+
+      <form id="species-form">
+        <div class="form-group">
+          <label>Scientific Name</label>
+          <input type="text" id="scientific_name" placeholder="e.g., Rhizophora mucronata">
+          <div class="hint">Latin binomial name (genus + species)</div>
+        </div>
+
+        <div class="form-group">
+          <label>Common Name (English)</label>
+          <input type="text" id="common_name" placeholder="e.g., Red Mangrove">
+        </div>
+
+        <div class="form-group">
+          <label>Creole Name</label>
+          <input type="text" id="creole_name" placeholder="e.g., Mangliye rouz">
+        </div>
+
+        <div class="form-group">
+          <label>Species Type</label>
+          <select id="species_type">
+            <option value="flora">Flora</option>
+            <option value="fauna">Fauna</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Description *</label>
+          <textarea id="description" required></textarea>
+        </div>
+
+        <div class="photos-section">
+          <h3>Photos</h3>
+          <div id="photos-container"></div>
+          <div class="hint">Photos cannot be modified here. To change photos, reject and ask the user to resubmit.</div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn btn-primary" id="save-btn">Save and Approve Species</button>
+          <button type="button" class="btn btn-secondary" id="reject-btn">Reject Instead</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://gftrszttkztlqwwoqrzy.supabase.co';
+    const EDGE_FUNCTION_URL = SUPABASE_URL + '/functions/v1/approve-species-request';
+
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    const requestId = params.get('id');
+    const token = params.get('token');
+
+    let requestData = null;
+    let imagePaths = [];
+
+    async function init() {
+      if (!requestId || !token) {
+        showError('Missing required parameters (id and token).');
+        return;
+      }
+
+      try {
+        // Fetch request data from edge function
+        const response = await fetch(EDGE_FUNCTION_URL + '?id=' + encodeURIComponent(requestId) + '&action=fetch&token=' + encodeURIComponent(token));
+
+        if (!response.ok) {
+          const text = await response.text();
+          // Try to parse as JSON
+          try {
+            const json = JSON.parse(text);
+            throw new Error(json.error || json.message || text);
+          } catch (e) {
+            if (e.message && e.message !== text) throw e;
+            throw new Error(text || 'Failed to load request data');
+          }
+        }
+
+        requestData = await response.json();
+
+        // Populate form
+        document.getElementById('submitted-by').textContent = requestData.user_email || 'Unknown';
+        document.getElementById('request-id').textContent = requestId;
+        document.getElementById('scientific_name').value = requestData.scientific_name || requestData.species_name || '';
+        document.getElementById('common_name').value = requestData.common_name || '';
+        document.getElementById('creole_name').value = requestData.creole_name || '';
+        document.getElementById('species_type').value = requestData.species_type || 'flora';
+        document.getElementById('description').value = requestData.species_description || '';
+
+        // Populate photos
+        imagePaths = requestData.image_paths || [];
+        const photosContainer = document.getElementById('photos-container');
+        if (imagePaths.length > 0) {
+          document.querySelector('.photos-section h3').textContent = 'Photos (' + imagePaths.length + ')';
+          imagePaths.forEach(function(url, i) {
+            const row = document.createElement('div');
+            row.className = 'photo-row';
+            row.innerHTML = '<img src="' + url + '" alt="Photo ' + (i + 1) + '"><span>' + url.split('/').pop() + '</span>';
+            photosContainer.appendChild(row);
+          });
+        } else {
+          document.querySelector('.photos-section h3').textContent = 'Photos (0)';
+          photosContainer.innerHTML = '<p style="color:#888;">No photos submitted.</p>';
+        }
+
+        // Show form
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('edit-form').style.display = 'block';
+
+      } catch (err) {
+        showError(err.message || 'Failed to load species data.');
+      }
+    }
+
+    function showError(message) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error-message').textContent = message;
+    }
+
+    function showSuccess(message) {
+      document.getElementById('edit-form').style.display = 'none';
+      document.getElementById('success').style.display = 'block';
+      document.getElementById('success-message').textContent = message;
+    }
+
+    // Handle form submission (Save & Approve)
+    document.getElementById('species-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+
+      try {
+        const body = new URLSearchParams();
+        body.set('id', requestId);
+        body.set('token', token);
+        body.set('action', 'save_edit');
+        body.set('scientific_name', document.getElementById('scientific_name').value);
+        body.set('common_name', document.getElementById('common_name').value);
+        body.set('creole_name', document.getElementById('creole_name').value);
+        body.set('species_type', document.getElementById('species_type').value);
+        body.set('description', document.getElementById('description').value);
+        body.set('image_paths', JSON.stringify(imagePaths));
+
+        const response = await fetch(EDGE_FUNCTION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString()
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || 'Failed to save and approve species');
+        }
+
+        showSuccess('Species has been edited and approved successfully! The user has been notified.');
+
+      } catch (err) {
+        showError(err.message || 'Failed to save species.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save and Approve Species';
+      }
+    });
+
+    // Handle reject button
+    document.getElementById('reject-btn').addEventListener('click', async function() {
+      if (!confirm('Are you sure you want to reject this species submission?')) return;
+
+      const rejectBtn = document.getElementById('reject-btn');
+      rejectBtn.disabled = true;
+      rejectBtn.textContent = 'Rejecting...';
+
+      try {
+        // Build reject token
+        const rejectToken = token.replace('edit', 'reject');
+
+        const response = await fetch(EDGE_FUNCTION_URL + '?id=' + encodeURIComponent(requestId) + '&action=reject&token=' + encodeURIComponent(rejectToken));
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || 'Failed to reject species');
+        }
+
+        showSuccess('Species submission has been rejected. The user has been notified.');
+
+      } catch (err) {
+        showError(err.message || 'Failed to reject species.');
+        rejectBtn.disabled = false;
+        rejectBtn.textContent = 'Reject Instead';
+      }
+    });
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
