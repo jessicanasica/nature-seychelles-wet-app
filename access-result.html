@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access Request Result - LEAP Wetland Monitoring</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; text-align: center; }
+    .header-approved { background: #52a676; color: white; padding: 30px 20px; }
+    .header-rejected { background: #ef4444; color: white; padding: 30px 20px; }
+    .header-error { background: #f59e0b; color: white; padding: 30px 20px; }
+    .header-approved h1, .header-rejected h1, .header-error h1 { margin: 0; font-size: 1.5rem; }
+    .icon { font-size: 48px; margin-bottom: 10px; }
+    .content { padding: 30px 20px; }
+    .status { font-weight: bold; font-size: 18px; margin-bottom: 15px; }
+    .status-approved { color: #52a676; }
+    .status-rejected { color: #ef4444; }
+    .detail { background: #f9fafb; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; }
+    .detail p { margin: 5px 0; }
+    .detail strong { color: #555; }
+    .footer { color: #999; font-size: 12px; padding: 0 20px 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="header-approved" class="header-approved" style="display:none;">
+      <div class="icon">&#10004;</div>
+      <h1>Access Request Approved</h1>
+    </div>
+    <div id="header-rejected" class="header-rejected" style="display:none;">
+      <div class="icon">&#10006;</div>
+      <h1>Access Request Rejected</h1>
+    </div>
+    <div id="header-error" class="header-error" style="display:none;">
+      <div class="icon">&#9888;</div>
+      <h1>Error</h1>
+    </div>
+
+    <div class="content">
+      <p id="status-text" class="status"></p>
+      <div class="detail">
+        <p><strong>User:</strong> <span id="user-email">-</span></p>
+        <p><strong>Requested Level:</strong> <span id="requested-level">-</span></p>
+        <p><strong>Request ID:</strong> <span id="request-id">-</span></p>
+      </div>
+      <p id="notification-text"></p>
+    </div>
+    <div class="footer">
+      <p>LEAP Wetland Monitoring</p>
+    </div>
+  </div>
+
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    var status = params.get('status') || 'error';
+    var email = params.get('email') || 'Unknown';
+    var level = params.get('level') || 'Unknown';
+    var id = params.get('id') || '-';
+    var error = params.get('error') || '';
+
+    document.getElementById('user-email').textContent = email;
+    document.getElementById('requested-level').textContent = 'Level ' + level;
+    document.getElementById('request-id').textContent = id;
+
+    if (status === 'approved') {
+      document.getElementById('header-approved').style.display = 'block';
+      document.getElementById('status-text').textContent = 'You have approved the access request for ' + email + ' to Level ' + level + '.';
+      document.getElementById('status-text').className = 'status status-approved';
+      document.getElementById('notification-text').textContent = 'The user has been notified and their access level has been updated.';
+    } else if (status === 'rejected') {
+      document.getElementById('header-rejected').style.display = 'block';
+      document.getElementById('status-text').textContent = 'You have rejected the access request for ' + email + '.';
+      document.getElementById('status-text').className = 'status status-rejected';
+      document.getElementById('notification-text').textContent = 'The user has been notified of the rejection.';
+    } else {
+      document.getElementById('header-error').style.display = 'block';
+      document.getElementById('status-text').textContent = error || 'An error occurred while processing the request.';
+      document.getElementById('status-text').className = 'status';
+    }
+  </script>
+</body>
+</html>
